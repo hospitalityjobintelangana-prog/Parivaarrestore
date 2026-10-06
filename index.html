@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parivaar Canteen - Food Order Sheet</title>
+<style>
+  :root{
+    --bg:#f3f5f4; --card:#ffffff; --ink:#17211d; --muted:#5d6b65; --line:#d5ddd9;
+    --accent:#0f5c4d; --accent-ink:#ffffff; --warn:#a4380f; --ok:#1b6b3a;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#101614; --card:#18211d; --ink:#e8efec; --muted:#9fb0a9; --line:#2d3b35; --accent:#4fb59f; --accent-ink:#06211a; --warn:#ff9a70; --ok:#6fd49a;}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:Georgia,"Times New Roman",serif;line-height:1.5}
+  .wrap{max-width:900px;margin:0 auto;padding:16px 14px 60px}
+  .org{font-size:2rem;font-weight:700;letter-spacing:.04em;color:var(--accent);margin:6px 0 0;line-height:1.2}
+  h1{font-size:1.3rem;margin:2px 0 2px}
+  h2{font-size:1.1rem;margin:0 0 12px}
+  .sub{color:var(--muted);margin:0 0 18px;font-family:system-ui,sans-serif;font-size:.9rem}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:18px}
+  label{display:block;font-family:system-ui,sans-serif;font-size:.8rem;color:var(--muted);margin-bottom:3px}
+  input[type=text],input[type=number],select{
+    width:100%;padding:10px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit;font-size:1rem}
+  input:focus-visible,button:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:1px}
+  input.bad{border-color:var(--warn)}
+  .datewrap{display:flex;gap:8px;position:relative;max-width:260px}
+  .datewrap .cal{padding:0 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font-size:1.2rem;cursor:pointer}
+  .hiddenDate{position:absolute;left:0;bottom:0;width:1px;height:1px;opacity:0;pointer-events:none;border:0;padding:0}
+  .row2{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end}
+  .oid{font-family:system-ui,sans-serif;font-size:.9rem;color:var(--muted);padding-bottom:10px}
+  .oid b{color:var(--ink)}
+  .item{border-top:1px solid var(--line);padding:12px 0}
+  .item:first-of-type{border-top:0;padding-top:0}
+  .item .lbl{font-weight:700;margin-bottom:6px}
+  .item .nm{margin-bottom:8px}
+  .pq{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn{padding:11px 18px;border-radius:4px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font-family:system-ui,sans-serif;font-size:.95rem;cursor:pointer}
+  .btn.ghost{background:transparent;color:var(--accent)}
+  .btn.danger{border-color:var(--warn);color:var(--warn);background:transparent}
+  .btn.small{padding:6px 10px;font-size:.8rem}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+  .msg{font-family:system-ui,sans-serif;font-size:.9rem;margin-top:12px;min-height:1.2em}
+  .msg.err{color:var(--warn)}
+  .msg.ok{color:var(--ok)}
+  .editbar{display:none;font-family:system-ui,sans-serif;font-size:.88rem;border:1px solid var(--accent);color:var(--accent);border-radius:4px;padding:8px 10px;margin-bottom:12px}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:4px}
+  table{border-collapse:collapse;width:100%;font-family:system-ui,sans-serif;font-size:.85rem;min-width:520px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{background:var(--bg)}
+  td.act{display:flex;gap:6px}
+  .empty{padding:20px;text-align:center;color:var(--muted);font-family:system-ui,sans-serif}
+  .exgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+  .exgrid h3{font-size:1rem;margin:0 0 8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="org">Parivaar Canteen</div>
+  <h1>Food Order Sheet</h1>
+  <p class="sub">Enter pax and quantity for each item, then submit. Orders are saved on this device only.</p>
+
+  <section class="card">
+    <div id="editbar" class="editbar"></div>
+    <div class="row2">
+      <div>
+        <label for="orderDate">Menu order for the date</label>
+        <div class="datewrap" data-datefield>
+          <input type="text" id="orderDate" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" autocomplete="off">
+          <button type="button" class="cal" aria-label="Pick date from calendar">&#128197;</button>
+          <input type="date" class="hiddenDate" tabindex="-1" aria-hidden="true">
+        </div>
+      </div>
+      <div class="oid" id="oidBox"></div>
+    </div>
+  </section>
+
+  <form id="orderForm" novalidate>
+    <div id="sections"></div>
+    <div class="actions">
+      <button type="submit" class="btn" id="submitBtn">Submit order</button>
+      <button type="button" class="btn ghost" id="clearBtn">Clear form</button>
+      <button type="button" class="btn ghost" id="cancelEditBtn" style="display:none">Cancel edit</button>
+    </div>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  </form>
+
+  <section class="card" style="margin-top:22px">
+    <h2>Saved orders</h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Order ID</th><th>Date</th><th>Items</th><th>Saved</th><th>Action</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty">No orders saved yet.</div>
+  </section>
+
+  <section class="card">
+    <h2>Export to Excel</h2>
+    <div class="exgrid">
+      <div>
+        <h3>Date wise</h3>
+        <label for="exDate">Choose date</label>
+        <div class="datewrap" data-datefield style="margin-bottom:10px">
+          <input type="text" id="exDate" inputmode="numeric" maxlength="10" placeholder="dd/mm/yyyy" autocomplete="off">
+          <button type="button" class="cal" aria-label="Pick date from calendar">&#128197;</button>
+          <input type="date" class="hiddenDate" tabindex="-1" aria-hidden="true">
+        </div>
+        <button type="button" class="btn" id="exDayBtn">Download date Excel</button>
+      </div>
+      <div>
+        <h3>Month wise</h3>
+        <div class="row2" style="margin-bottom:10px">
+          <div style="flex:1;min-width:120px"><label for="exMonth">Month</label><select id="exMonth"></select></div>
+          <div style="width:100px"><label for="exYear">Year</label><input type="number" id="exYear" min="2000" max="2100" inputmode="numeric"></div>
+        </div>
+        <button type="button" class="btn" id="exMonthBtn">Download month Excel</button>
+      </div>
+      <div>
+        <h3>Backup and restore</h3>
+        <p class="sub" style="margin:0 0 10px">Save all orders to a file, or load them back after clearing the browser or changing phone.</p>
+        <div class="actions" style="margin-top:0">
+          <button type="button" class="btn" id="backupBtn">Backup all orders</button>
+          <button type="button" class="btn ghost" id="restoreBtn">Restore from backup</button>
+        </div>
+        <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+      </div>
+    </div>
+    <div class="msg" id="exMsg" role="status" aria-live="polite"></div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
+<script>
+(function(){
+  var KEY = "focusPrism.menuOrders.v1";
+
+  /* ---------- menu definition ---------- */
+  function dishes(){ return [
+    {k:"dal",label:"Dal of the Day",edit:true,ph:"Dal name"},
+    {k:"subzi",label:"Subzi of the Day",edit:true,ph:"Subzi name"},
+    {k:"pulao",label:"Pulao of the Day",edit:true,ph:"Pulao name"}
+  ]; }
+  function southDishes(){ return [
+    {k:"poriyal",label:"Poriyal",edit:true,ph:"Poriyal name"},
+    {k:"sambarRasam",label:"Sambar / Rasam",edit:true,ph:"Sambar or Rasam"}
+  ]; }
+  var SECTIONS = [
+    {key:"breakfast",session:"Breakfast",title:"Breakfast",items:[
+      {k:"uppama",label:"Breakfasts Variety",edit:true,def:true},
+      {k:"dosaBatter",label:"Dosa Batter",edit:true,def:true},
+      {k:"idlyBatter",label:"Idly Batter",edit:true,def:true},
+      {k:"dosaAloo",label:"Dosa Aloo Masala",edit:true,def:true},
+      {k:"chutney",label:"Chutney",edit:true,def:true},
+      {k:"sambar",label:"Sambar",edit:true,def:true},
+      {k:"samosa",label:"Samosa",edit:true,def:true},
+      {k:"kachoori",label:"Kachoori",edit:true,def:true},
+      {k:"dokhla",label:"Dokhla",edit:true,def:true}
+    ]},
+    {key:"lunchCounter",session:"Lunch",title:"Lunch Counter",items:dishes().concat(southDishes())},
+    {key:"rainbow",session:"Lunch",title:"Rainbow Restaurant",items:dishes().concat(southDishes())},
+    {key:"staffLunch",session:"Lunch",title:"Staff Food - Lunch",items:[
+      {k:"rice",label:"Rice"},{k:"dal",label:"Dal"},{k:"subzi",label:"Subzi"},{k:"buttermilk",label:"Buttermilk"},{k:"chutney",label:"Chutney"}
+    ]},
+    {key:"staffDinner",session:"Dinner",title:"Staff Food - Dinner",items:[
+      {k:"rice",label:"Rice"},{k:"subzi",label:"Subzi"},{k:"dal",label:"Dal"},{k:"chutney",label:"Chutney"}
+    ]},
+    {key:"dhDinner",session:"Dinner",title:"Parivaar Canteen Dinner",items:[
+      {k:"rice",label:"Rice"},{k:"subzi",label:"Subzi"},{k:"sambar",label:"Sambar"},{k:"chutney",label:"Chutney"}
+    ]}
+  ];
+  SECTIONS.forEach(function(sec){ sec.items.forEach(function(it){ it.unit = "Kgs"; }); });
+
+  function $(id){return document.getElementById(id)}
+  function esc(s){ return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]}); }
+
+  /* ---------- storage ---------- */
+  function load(){
+    try{ var d = JSON.parse(localStorage.getItem(KEY)); return Array.isArray(d) ? d : []; }catch(e){ return []; }
+  }
+  function store(list){
+    try{ localStorage.setItem(KEY, JSON.stringify(list)); return true; }
+    catch(e){ setMsg("Could not save. Browser storage is unavailable or full.", "err"); return false; }
+  }
+
+  /* ---------- dates (dd/mm/yyyy shown, yyyy-mm-dd stored) ---------- */
+  function pad(n){ return (n<10?"0":"")+n; }
+  function parseDMY(t){
+    var m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(t).trim());
+    if(!m) return "";
+    var d=+m[1], mo=+m[2], y=+m[3];
+    if(y<2000 || y>2100 || mo<1 || mo>12) return "";
+    var dt = new Date(y, mo-1, d);
+    if(dt.getFullYear()!==y || dt.getMonth()!==mo-1 || dt.getDate()!==d) return "";
+    return y+"-"+pad(mo)+"-"+pad(d);
+  }
+  function isoToDMY(iso){
+    var p = (iso||"").split("-");
+    return p.length===3 ? p[2]+"/"+p[1]+"/"+p[0] : (iso||"");
+  }
+  function todayISO(){ var n=new Date(); return n.getFullYear()+"-"+pad(n.getMonth()+1)+"-"+pad(n.getDate()); }
+  function tomorrowISO(){ var n=new Date(); n.setDate(n.getDate()+1); return n.getFullYear()+"-"+pad(n.getMonth()+1)+"-"+pad(n.getDate()); }
+
+  document.querySelectorAll("[data-datefield]").forEach(function(box){
+    var txt = box.querySelector('input[type=text]'), hid = box.querySelector(".hiddenDate"), btn = box.querySelector(".cal");
+    txt.addEventListener("input", function(){
+      var d = this.value.replace(/\D/g,"").slice(0,8), out = d;
+      if(d.length>4) out = d.slice(0,2)+"/"+d.slice(2,4)+"/"+d.slice(4);
+      else if(d.length>2) out = d.slice(0,2)+"/"+d.slice(2);
+      this.value = out;
+      if(txt.id==="orderDate") updateOid();
+    });
+    btn.addEventListener("click", function(){
+      if(txt.disabled) return;
+      hid.value = parseDMY(txt.value) || "";
+      try{ hid.showPicker(); }catch(e){ try{ hid.focus(); hid.click(); }catch(e2){} }
+    });
+    hid.addEventListener("change", function(){
+      if(hid.value){ txt.value = isoToDMY(hid.value); if(txt.id==="orderDate") updateOid(); }
+    });
+  });
+
+  /* ---------- order id ---------- */
+  function nextId(iso){
+    var max = 0, prefix = "ORD-" + iso.replace(/-/g,"") + "-";
+    load().forEach(function(o){
+      if(o.date===iso && o.id.indexOf(prefix)===0){ var n = parseInt(o.id.slice(prefix.length),10); if(n>max) max=n; }
+    });
+    return prefix + pad(max+1);
+  }
+  function updateOid(){
+    var box = $("oidBox");
+    if(editingId){ box.innerHTML = "Order ID: <b>"+esc(editingId)+"</b>"; return; }
+    var iso = parseDMY($("orderDate").value);
+    box.innerHTML = iso ? "Next Order ID: <b>"+esc(nextId(iso))+"</b>" : "";
+  }
+
+  /* ---------- build form ---------- */
+  function buildForm(){
+    var html = "";
+    SECTIONS.forEach(function(sec){
+      html += '<section class="card"><h2>'+esc(sec.title)+'</h2>';
+      sec.items.forEach(function(it){
+        var id = sec.key+"."+it.k;
+        html += '<div class="item" data-id="'+id+'"><div class="lbl">'+esc(it.label)+'</div>';
+        if(it.edit) html += '<div class="nm"><label>'+(it.def?'Item name':'Dish name')+' (editable)</label><input type="text" data-f="name" placeholder="'+esc(it.ph||it.label)+'" value="'+(it.def?esc(it.label):'')+'" autocomplete="off"></div>';
+        html += '<div class="pq"><div><label>Pax</label><input type="number" data-f="pax" min="0" step="1" inputmode="numeric" placeholder="Pax"></div>'+
+                '<div><label>Qty'+(it.unit?' ('+esc(it.unit)+')':'')+'</label><input type="number" data-f="qty" min="0" step="any" inputmode="decimal" placeholder="Qty'+(it.unit?' in '+esc(it.unit):'')+'"></div></div></div>';
+      });
+      html += '</section>';
+    });
+    $("sections").innerHTML = html;
+  }
+
+  function itemEl(id){ return document.querySelector('.item[data-id="'+id+'"]'); }
+  function field(id,f){ return itemEl(id).querySelector('[data-f="'+f+'"]'); }
+
+  /* ---------- state ---------- */
+  var editingId = null;
+
+  function setMsg(t, cls){ var m=$("msg"); m.textContent=t; m.className="msg"+(cls?" "+cls:""); }
+
+  function clearForm(keepDate){
+    document.querySelectorAll("#sections input").forEach(function(i){ i.value=""; i.classList.remove("bad"); });
+    SECTIONS.forEach(function(sec){ sec.items.forEach(function(it){
+      if(it.def){ field(sec.key+"."+it.k,"name").value = it.label; }
+    }); });
+    editingId = null;
+    $("editbar").style.display = "none";
+    $("cancelEditBtn").style.display = "none";
+    $("submitBtn").textContent = "Submit order";
+    $("orderDate").disabled = false;
+    if(!keepDate) $("orderDate").value = isoToDMY(tomorrowISO());
+    updateOid();
+  }
+
+  /* ---------- collect + validate ---------- */
+  function collect(){
+    var items = {}, problems = 0, first = null, filled = 0;
+    SECTIONS.forEach(function(sec){
+      sec.items.forEach(function(it){
+        var id = sec.key+"."+it.k, el = itemEl(id);
+        var nameEl = el.querySelector('[data-f="name"]'), paxEl = el.querySelector('[data-f="pax"]'), qtyEl = el.querySelector('[data-f="qty"]');
+        var name = nameEl ? nameEl.value.trim() : "", pax = paxEl.value.trim(), qty = qtyEl.value.trim();
+        [paxEl,qtyEl].forEach(function(x){ x.classList.remove("bad"); });
+        if(it.def ? (!pax && !qty) : (!name && !pax && !qty)) return;
+        var bad = false;
+        if(pax==="" || isNaN(Number(pax)) || Number(pax)<0 || Math.floor(Number(pax))!==Number(pax)){ paxEl.classList.add("bad"); bad = true; }
+        if(qty==="" || isNaN(Number(qty)) || Number(qty)<0){ qtyEl.classList.add("bad"); bad = true; }
+        if(bad){ problems++; if(!first) first = el.querySelector(".bad"); return; }
+        items[id] = {name:name, pax:Number(pax), qty:Number(qty)};
+        filled++;
+      });
+    });
+    return {items:items, problems:problems, first:first, filled:filled};
+  }
+
+  $("orderForm").addEventListener("submit", function(ev){
+    ev.preventDefault();
+    setMsg("");
+    var iso = parseDMY($("orderDate").value);
+    if(!iso){ setMsg("Enter a valid order date as dd/mm/yyyy.", "err"); $("orderDate").focus(); return; }
+    var c = collect();
+    if(c.problems){ setMsg("Enter both pax (whole number) and qty for the highlighted items.", "err"); if(c.first) c.first.focus(); return; }
+    if(!c.filled){ setMsg("Enter pax and qty for at least one item.", "err"); return; }
+
+    var list = load(), now = new Date().toISOString(), id;
+    if(editingId){
+      var idx = -1;
+      list.forEach(function(o,i){ if(o.id===editingId) idx = i; });
+      if(idx<0){ setMsg("That order no longer exists.", "err"); clearForm(); return; }
+      list[idx].items = c.items; list[idx].updated = now;
+      id = editingId;
+    }else{
+      id = nextId(iso);
+      list.push({id:id, date:iso, created:now, updated:now, items:c.items});
+    }
+    if(!store(list)) return;
+    var wasEdit = !!editingId;
+    clearForm(true);
+    setMsg((wasEdit ? "Order updated: " : "Order saved: ") + id, "ok");
+    render();
+  });
+
+  $("clearBtn").addEventListener("click", function(){ clearForm(true); setMsg(""); });
+  $("cancelEditBtn").addEventListener("click", function(){ clearForm(true); setMsg(""); });
+
+  /* ---------- saved orders list ---------- */
+  function render(){
+    var list = load().sort(function(a,b){ return a.date===b.date ? b.id.localeCompare(a.id) : (a.date<b.date?1:-1); });
+    $("empty").style.display = list.length ? "none" : "block";
+    $("rows").innerHTML = list.map(function(o){
+      return "<tr><td>"+esc(o.id)+"</td><td>"+isoToDMY(o.date)+"</td><td>"+Object.keys(o.items).length+"</td>"+
+        "<td>"+new Date(o.updated||o.created).toLocaleString("en-IN",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"})+"</td>"+
+        '<td class="act"><button type="button" class="btn ghost small" data-edit="'+esc(o.id)+'">Edit</button>'+
+        '<button type="button" class="btn danger small" data-del="'+esc(o.id)+'">Delete</button></td></tr>';
+    }).join("");
+    updateOid();
+  }
+
+  var delTimer = null;
+  $("rows").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    var list = load();
+    if(b.dataset.edit){
+      var o = list.filter(function(x){return x.id===b.dataset.edit})[0]; if(!o) return;
+      clearForm(true);
+      $("orderDate").value = isoToDMY(o.date); $("orderDate").disabled = true;
+      Object.keys(o.items).forEach(function(id){
+        var el = itemEl(id); if(!el) return;
+        var n = el.querySelector('[data-f="name"]'); if(n) n.value = o.items[id].name || "";
+        el.querySelector('[data-f="pax"]').value = o.items[id].pax;
+        el.querySelector('[data-f="qty"]').value = o.items[id].qty;
+      });
+      editingId = o.id;
+      $("editbar").textContent = "Editing order " + o.id + " (" + isoToDMY(o.date) + "). Change the values and submit to update.";
+      $("editbar").style.display = "block";
+      $("cancelEditBtn").style.display = "inline-block";
+      $("submitBtn").textContent = "Update order";
+      updateOid(); setMsg("");
+      window.scrollTo({top:0,behavior:"smooth"});
+    }else if(b.dataset.del){
+      if(b.dataset.armed){
+        list = list.filter(function(x){return x.id!==b.dataset.del});
+        if(store(list)){ if(editingId===b.dataset.del) clearForm(true); render(); setMsg("Order deleted: "+b.dataset.del, "ok"); }
+      }else{
+        b.dataset.armed = "1"; b.textContent = "Tap again to confirm";
+        clearTimeout(delTimer);
+        delTimer = setTimeout(function(){ render(); }, 4000);
+      }
+    }
+  });
+
+  /* ---------- file saving ---------- */
+  function exMsg(t, cls){ var m=$("exMsg"); m.textContent=t; m.className="msg"+(cls?" "+cls:""); }
+  function saveFile(filename, data, mime){
+    if(window.claude && typeof window.claude.use === "function"){
+      return window.claude.use("downloads").then(function(dl){
+        if(!dl){ exMsg("Downloads are not available in this view.", "err"); return false; }
+        return dl.save({filename:filename, data:data}).then(function(){ return true; }, function(err){
+          if(!err || err.code !== "declined") exMsg("Could not save the file.", "err");
+          return false;
+        });
+      });
+    }
+    var blob = new Blob([data], {type:mime});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    return Promise.resolve(true);
+  }
+  var XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+  /* ---------- Excel export ---------- */
+  var SESSIONS = ["Breakfast","Lunch","Dinner"];
+  var HEAD = ["Date","Order ID","Session","Category","Item","Pax","Qty (Kgs)"];
+  var W = [12,18,12,38,34,8,12];
+
+  function itemText(it, names){
+    names = names.filter(Boolean);
+    if(it.def) return names.length ? names.join(" / ") : it.label;
+    return names.length ? it.label + " - " + names.join(" / ") : it.label;
+  }
+  function flatRows(orders){
+    var rows = [];
+    orders.slice().sort(function(a,b){ return a.date===b.date ? a.id.localeCompare(b.id) : (a.date<b.date?-1:1); }).forEach(function(o){
+      SECTIONS.forEach(function(sec){
+        sec.items.forEach(function(it){
+          var r = o.items[sec.key+"."+it.k]; if(!r) return;
+          rows.push([isoToDMY(o.date), o.id, sec.session, sec.title, itemText(it,[r.name]), r.pax, r.qty]);
+        });
+      });
+    });
+    return rows;
+  }
+  /* daily sheet: Dated line, then Breakfast / Lunch / Dinner blocks of S.No., Session, Items, Pax, Qty */
+  function dailyRows(orders, iso){
+    var rows = [["Dated", isoToDMY(iso)]], kinds = ["date"];
+    SESSIONS.forEach(function(ses){
+      var n = 0, block = [];
+      SECTIONS.forEach(function(sec){
+        if(sec.session !== ses) return;
+        sec.items.forEach(function(it){
+          var pax = 0, qty = 0, names = [], found = false;
+          orders.forEach(function(o){
+            var r = o.items[sec.key+"."+it.k]; if(!r) return;
+            found = true; pax += r.pax; qty += r.qty;
+            if(r.name && names.indexOf(r.name)<0) names.push(r.name);
+          });
+          if(!found) return;
+          n++;
+          block.push([n, sec.title, itemText(it,names), pax, Math.round(qty*1000)/1000]);
+        });
+      });
+      if(!block.length) return;
+      rows.push([]); kinds.push("blank");
+      rows.push([ses,"","","",""]); kinds.push("title");
+      rows.push(["S.No.","Session","Items","Pax","Qty (Kgs)"]); kinds.push("head");
+      block.forEach(function(r){ rows.push(r); kinds.push("data"); });
+    });
+    return {rows:rows, kinds:kinds};
+  }
+
+  /* borders on every written cell + light fill so text stays readable */
+  var BORDER = {style:"thin", color:{rgb:"7A8A84"}};
+  var FILLS = {date:"D9EDE8", title:"A8D5C8", head:"BFE0D6", data:"EEF7F4"};
+  function sheetFrom(rows, widths, kinds){
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws["!cols"] = widths.map(function(w){ return {wch:w}; });
+    ws["!merges"] = [];
+    rows.forEach(function(r, ri){
+      var kind = kinds ? kinds[ri] : (ri===0 ? "head" : "data");
+      if(!r.length) return;
+      if(kind==="title") ws["!merges"].push({s:{r:ri,c:0}, e:{r:ri,c:r.length-1}});
+      for(var ci=0; ci<r.length; ci++){
+        var addr = XLSX.utils.encode_cell({r:ri,c:ci}), cell = ws[addr];
+        if(!cell) continue;
+        cell.s = {
+          font: {color:{rgb:"000000"}, bold: kind!=="data"},
+          fill: {patternType:"solid", fgColor:{rgb:FILLS[kind]}},
+          border: {top:BORDER, bottom:BORDER, left:BORDER, right:BORDER},
+          alignment: {vertical:"center", wrapText:true, horizontal: (kind==="data" && (typeof cell.v==="number")) ? "center" : "left"}
+        };
+      }
+    });
+    return ws;
+  }
+  var DW = [8,38,34,8,12];
+
+  function ready(){
+    if(typeof XLSX === "undefined"){ exMsg("Excel library could not load. Check your internet connection and reload.", "err"); return false; }
+    return true;
+  }
+
+  $("exDayBtn").addEventListener("click", function(){
+    exMsg("");
+    var iso = parseDMY($("exDate").value);
+    if(!iso){ exMsg("Enter a valid date as dd/mm/yyyy.", "err"); return; }
+    var orders = load().filter(function(o){ return o.date===iso; });
+    if(!orders.length){ exMsg("No orders saved for " + isoToDMY(iso) + ".", "err"); return; }
+    if(!ready()) return;
+    var wb = XLSX.utils.book_new();
+    var p = iso.split("-");
+    var dr = dailyRows(orders, iso);
+    XLSX.utils.book_append_sheet(wb, sheetFrom(dr.rows, DW, dr.kinds), p[2]+"-"+p[1]+"-"+p[0]);
+    var buf = XLSX.write(wb, {bookType:"xlsx", type:"array"});
+    saveFile("food-order-" + iso + ".xlsx", buf, XLSX_MIME).then(function(ok){ if(ok) exMsg("Excel file saved for " + isoToDMY(iso) + ".", "ok"); });
+  });
+
+  $("exMonthBtn").addEventListener("click", function(){
+    exMsg("");
+    var mo = +$("exMonth").value, y = parseInt($("exYear").value,10);
+    if(!y || y<2000 || y>2100){ exMsg("Enter a valid year.", "err"); return; }
+    var prefix = y+"-"+pad(mo)+"-";
+    var orders = load().filter(function(o){ return o.date.indexOf(prefix)===0; });
+    if(!orders.length){ exMsg("No orders saved for " + pad(mo) + "/" + y + ".", "err"); return; }
+    if(!ready()) return;
+    var wb = XLSX.utils.book_new();
+
+    XLSX.utils.book_append_sheet(wb, sheetFrom([HEAD].concat(flatRows(orders)), W), "All dates");
+
+    var totals = {}, order = [];
+    orders.forEach(function(o){
+      SECTIONS.forEach(function(sec){
+        sec.items.forEach(function(it){
+          var r = o.items[sec.key+"."+it.k]; if(!r) return;
+          var k = sec.key+"."+it.k;
+          if(!totals[k]){ totals[k] = {session:sec.session, section:sec.title, item:it.label, pax:0, qty:0}; order.push(k); }
+          totals[k].pax += r.pax; totals[k].qty += r.qty;
+        });
+      });
+    });
+    var trows = [["Session","Category","Item","Total pax","Total qty (Kgs)"]];
+    order.forEach(function(k){ var t = totals[k]; trows.push([t.session, t.section, t.item, t.pax, Math.round(t.qty*1000)/1000]); });
+    XLSX.utils.book_append_sheet(wb, sheetFrom(trows, [12,38,28,12,16]), "Month totals");
+
+    var dates = [];
+    orders.forEach(function(o){ if(dates.indexOf(o.date)<0) dates.push(o.date); });
+    dates.sort().forEach(function(d){
+      var p = d.split("-");
+      var dayOrders = orders.filter(function(o){ return o.date===d; });
+      var dr = dailyRows(dayOrders, d);
+      XLSX.utils.book_append_sheet(wb, sheetFrom(dr.rows, DW, dr.kinds), p[2]+"-"+p[1]+"-"+p[0]);
+    });
+
+    var buf = XLSX.write(wb, {bookType:"xlsx", type:"array"});
+    saveFile("food-orders-" + y + "-" + pad(mo) + ".xlsx", buf, XLSX_MIME).then(function(ok){ if(ok) exMsg("Month Excel saved with " + orders.length + " order" + (orders.length===1?"":"s") + ".", "ok"); });
+  });
+
+  /* ---------- backup / restore ---------- */
+  $("backupBtn").addEventListener("click", function(){
+    exMsg("");
+    var list = load();
+    if(!list.length){ exMsg("Nothing to back up yet.", "err"); return; }
+    var payload = {app:"focusPrismMenuOrders", version:1, exported:new Date().toISOString(), orders:list};
+    var d = todayISO();
+    saveFile("food-orders-backup-" + d + ".json", JSON.stringify(payload, null, 2), "application/json").then(function(ok){
+      if(ok) exMsg("Backup saved with " + list.length + " order" + (list.length===1?"":"s") + ".", "ok");
+    });
+  });
+
+  $("restoreBtn").addEventListener("click", function(){ $("restoreFile").click(); });
+
+  $("restoreFile").addEventListener("change", function(){
+    var input = this, file = input.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var parsed = JSON.parse(reader.result);
+        if(!parsed || parsed.app !== "focusPrismMenuOrders" || !Array.isArray(parsed.orders)) throw new Error("bad file");
+        var list = load(), added = 0, updated = 0, kept = 0;
+        parsed.orders.forEach(function(o){
+          if(!o || typeof o.id!=="string" || !/^\d{4}-\d{2}-\d{2}$/.test(o.date||"") || !o.items || typeof o.items!=="object") return;
+          var idx = -1;
+          list.forEach(function(x,i){ if(x.id===o.id) idx = i; });
+          if(idx<0){ list.push(o); added++; }
+          else if((o.updated||"") > (list[idx].updated||"")){ list[idx] = o; updated++; }
+          else kept++;
+        });
+        if(!store(list)) return;
+        render();
+        exMsg("Restore done: " + added + " added, " + updated + " updated, " + kept + " already up to date.", "ok");
+      }catch(e){
+        exMsg("That file is not a valid food order backup.", "err");
+      }
+      input.value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  /* ---------- init ---------- */
+  var MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  $("exMonth").innerHTML = MONTHS.map(function(m,i){ return '<option value="'+(i+1)+'">'+m+'</option>'; }).join("");
+  var now = new Date();
+  $("exMonth").value = String(now.getMonth()+1);
+  $("exYear").value = now.getFullYear();
+  $("exDate").value = isoToDMY(todayISO());
+
+  buildForm();
+  clearForm(false);
+  render();
+})();
+</script>
+
+</body>
+</html>
